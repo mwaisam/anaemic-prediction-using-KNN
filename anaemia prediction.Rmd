@@ -1,0 +1,174 @@
+---
+title: "anaemia prediction using KNN"
+author: "sam"
+date: "2025-03-28"
+output: github_document
+---
+
+![A normal cell compared to an anemic cell](images/newest.PNG)
+
+## loading the necessary packages
+
+```{r message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(class)
+```
+
+## Importing the dataset
+
+```{r}
+anaemia <- read.csv("C:/Users/LENOVO/Downloads/d_output.csv")
+head(anaemia)
+```
+
+## checking for missing values.
+
+```{r}
+sum(is.na(anaemia))
+```
+
+The data has no missing values
+
+## checking the structure of the dataset
+
+```{r}
+str(anaemia)
+```
+
+## Checking the proportion of male and females.
+
+```{r}
+table(anaemia$Sex)
+```
+
+## Checking the proportion of patients who are and who are not anaemic
+
+```{r}
+table(anaemia$Anaemic)
+```
+
+## Recording the characters to numeric
+
+```{r warning=FALSE}
+anaemia <- anaemia %>%
+  mutate(Sex = recode(Sex, 'F' = 0, 'F ' = 0, 'M' = 1, 'M ' = 1),
+         Anaemic = recode(Anaemic, 'Yes' = 1, 'No' = 0))
+```
+
+```{r}
+# Anaemic; yes = 1, no = 0
+anaemia%>%
+    count(Anaemic)
+
+# sex; Female = 0, Male = 1
+anaemia %>%
+    count(Sex)
+```
+
+```{r}
+haem <-anaemia %>%
+  count(Hb)
+nrow(haem)
+
+# getting the minimum and maximum values in the dataset.
+min(anaemia$Hb)
+max(anaemia$Hb)
+```
+
+```{r}
+# column names
+names(anaemia)
+```
+
+```{r}
+anaemia$Anaemic <- factor(anaemia$Anaemic)
+anaemia$Sex <- factor(anaemia$Sex)
+str(anaemia)
+```
+
+Setting male = 1,Female =0
+
+```{r}
+ggplot(anaemia,aes(x= Sex,fill = Anaemic))+ geom_bar(position = "dodge") + labs(title = "Count of gender according to whether the gender is anemic or not") + scale_fill_brewer(palette = "Set1")+ geom_text(stat = "count", aes(label = ..count..), position = position_dodge(width = 0.9),vjust = -0.5, size = 3.5,colour = "black", fontface = "bold")+theme_classic()
+
+```
+
+Hemoglobin (Hb) is the protein contained in red blood cells that is responsible for delivery of oxygen to the tissues. To ensure adequate tissue oxygenation, a sufficient hemoglobin level must be maintained. The amount of hemoglobin in whole blood is expressed in grams per deciliter (g/dl). The normal Hb level for males is 14 to 18 g/dl; that for females is 12 to 16 g/dl. When the hemoglobin level is low, the patient has anemia. An erythrocytosis is the consequence of too many red cells; this results in hemoglobin levels above normal.
+
+## checking out the Hb column to find out useful information.
+
+```{r}
+classify_hb <- function(sex, hb) {
+  if(sex == 0){
+    if(hb >= 12.0 & hb <= 15.0){
+      return("Normal")
+    } else{
+      return("Abnormal")
+    }
+  } else if(sex == 1){
+    if(hb >= 13.5 & hb <= 18.0){
+      return("Normal")
+    } else{
+      return("Abnormal")
+    }
+  } else{
+    return("Unknown")
+  }
+}
+
+ anaemia <- anaemia %>%
+  mutate(Hb_status = mapply(classify_hb, Sex, Hb))
+```
+
+```{r}
+anaemia %>%
+  count(Hb_status)
+```
+
+## Hb status by sex
+
+```{r warning=FALSE}
+ggplot(anaemia,aes(x= Sex,fill = Hb_status))+ geom_bar(position = "dodge") + labs(title = "Hb status by sex") + scale_fill_brewer(palette = "Set1")+ geom_text(stat = "count", aes(label = ..count..), position = position_dodge(width = 0.9),vjust = -0.5, size = 3.5,colour = "black", fontface = "bold")+ theme_minimal()
+```
+
+```{r}
+# Dropping unnecessary columns or features.
+anaemia<- anaemia %>% select(-Number, -Hb_status)
+```
+
+```{r}
+# Preparing numerical features
+set.seed(123)
+train <- anaemia%>% sample_frac(0.7)
+test <- anaemia %>% anti_join(train,by = "Hb")
+
+train_feature<- train[ ,c(-6,-7)]
+train_labels<- train$Anaemic
+test_feat<- test[ ,c(-6,-7)]
+test_label<-test$Anaemic
+```
+
+## Fitting the knn model
+
+```{r}
+predictedlabels <-knn(train= train_feature,test= test_feat,cl = train_labels,k=3)
+predictedlabels
+```
+
+## Evaluating the accuracy of the model
+
+```{r}
+accuracy <- mean(predictedlabels == test_label)
+print(paste("Accuracy is :", accuracy))
+```
+
+## plotting a heat map
+
+```{r warning=FALSE}
+conf<- table(predicted = predictedlabels,actual = test_label)
+conf_df <- as.data.frame(as.table(conf))
+ggplot(conf_df, aes(x = actual, y = predicted, fill = Freq)) + geom_tile(color = "black") +
+  scale_fill_gradient(low = "red", high = "blue")+ geom_text(aes(label = Freq), size = 5)+labs(title = "Confusion Matrix for KNN clasifier", x = "Actual", y = "Predicted") +
+  theme_minimal()
+```
